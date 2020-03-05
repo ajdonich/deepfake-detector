@@ -1,0 +1,21 @@
+name: deepfake
+dependencies:
+  - pip
+  - wget
+  - numpy
+  - pandas
+  - pylint
+  - pytest
+  - requests
+  - jupyterlab
+  - tensorflow
+  - conda-forge::opencv
+  - conda-forge::kaggle
+  
+
+
+
+
+
+
+
