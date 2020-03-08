@@ -1,21 +1,20 @@
 name: deepfake
+channels:
+  - conda-forge
+  - defaults
 dependencies:
   - pip
   - wget
   - numpy
   - pandas
   - pylint
+  - pyspark
+  - python=3.7
   - pytest
   - requests
   - jupyterlab
   - tensorflow
-  - conda-forge::opencv
-  - conda-forge::kaggle
-  
-
-
-
-
-
-
-
+  - opencv
+  - kaggle
+  - pip:
+      - awscli
