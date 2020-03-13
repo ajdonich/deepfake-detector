@@ -5,6 +5,7 @@ channels:
 dependencies:
   - pip
   - wget
+  - psutil
   - numpy
   - pandas
   - pylint
@@ -12,8 +13,9 @@ dependencies:
   - python=3.7
   - pytest
   - requests
+  - matplotlib
   - jupyterlab
-  - tensorflow
+  - defaults::tensorflow
   - opencv
   - kaggle
   - pip:

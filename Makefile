@@ -40,4 +40,8 @@ aws:
 	@$(DEV) aws configure
 
 upload:
-	@$(DEV) aws s3 sync data-lake/input-data/ s3://donich-brothers/deepfake/input/
+
+	# TODO: dealing with the variable partition name: dfdc_train_part_XX 
+
+	@$(DEV) aws s3 sync data-lake/input-data/dfdc_train_part_XX s3://donich-brothers/deepfake/datalake/dfdc_train_part_XX
+	#@$(DEV) aws s3 sync '/Volumes/My Book/deepfake-detect-datalake/dfdc_train_part_0/' s3://donich-brothers/deepfake/datalake/dfdc_train_part_0/
