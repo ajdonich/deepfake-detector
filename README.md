@@ -5,7 +5,7 @@ See: [Kaggle Deepfake Detection Challenge](https://www.kaggle.com/c/deepfake-det
 
 NOTE: you have to download Kaggle's little sample dataset manually (with your browser or kaggle CLI).  
 Create a data subdirectory in the repo root directory and unzip the sample dataset there. The full  
-dataset can be downloaded using 
+dataset can be downloaded using this [Data Downloader Notebook](notebooks/data_downloader.ipynb)
 
 ___
 
