@@ -4,14 +4,14 @@ import config.config as dfc
 class VideoTuple:
 #{
     def __init__(self, video_id='DEFAULT', blk_id=None, split=None, vidname=None, 
-                 part_id=None, label=None, origname=None, preprocflg=False):
+                 partition=None, label=None, origname=None, preprocflg=False):
     #{
         self.video_id = video_id
         self.blk_id = blk_id
         self.split = split
 
         self.vidname = vidname
-        self.part_id = part_id
+        self.partition = partition
         self.label = label
         self.origname = origname
         self.preprocflg = preprocflg        
@@ -19,11 +19,11 @@ class VideoTuple:
 
     def __repr__(self):
         return (f"VideoTuple: {self.video_id}, {self.blk_id}, {self.split}, {self.vidname}, "
-                f"{self.part_id}, {self.label}, {self.origname}, {self.preprocflg}")
+                f"{self.partition}, {self.label}, {self.origname}, {self.preprocflg}")
 
-    def get_tuple(self):
-        return (self.video_id, self.blk_id, self.split, self.vidname, 
-                self.part_id, self.label, self.origname, self.preprocflg)
+    def get_insert(self):
+        return (self.blk_id, self.split, self.vidname, self.partition, 
+                self.label, self.origname, self.preprocflg)
 #}
 
 class EpochTuple:
@@ -33,20 +33,20 @@ class EpochTuple:
         self.blk_id = blk_id
         self.status = status
 
-    def __repr__(self):
+    def __repr__(self): 
         return (f"EpochTuple: {self.epoch_id}, {self.blk_id}, {self.status}")
 
-    def get_tuple(self):
-        return (self.epoch_id, self.blk_id, self.status)
+    def get_insert(self): 
+        return (self.blk_id, self.status)
 #}
 
 class PostgreSqlHandle: 
 #{
     _epoch_schema = (
         """ CREATE TABLE epoch_queue (
-                epoch_id SERIAL PRIMARY KEY
+                epoch_id SERIAL PRIMARY KEY,
                 blk_id INTEGER NOT NULL,
-                status VARCHAR(16) NOT NULL
+                status VARCHAR(16) NOT NULL)
         """)
     
     _videos_schema = (
@@ -55,10 +55,11 @@ class PostgreSqlHandle:
                 blk_id INTEGER NOT NULL,
                 split VARCHAR(8) NOT NULL,
                 vidname VARCHAR(32) NOT NULL,
-                part_id INTEGER NOT NULL,
+                partition INTEGER NOT NULL,
                 label VARCHAR(8) NOT NULL,
                 origname VARCHAR(32),
-                proc_flg BOOLEAN NOT NULL)
+                proc_flg BOOLEAN NOT NULL);
+            CREATE INDEX ON videos (blk_id, split)
         """)
 
     def __init__(self, verbose=False): 
@@ -141,11 +142,12 @@ class PostgreSqlHandle:
             if eexists or vexists: usrrsp = input(f"Are you sure you want reinitialize this database?\n[N/y]")
             if usrrsp.lower() != 'y': print("Database initialization operation aborted."); return False
             
-            print("Commencing database initialization...")
+            print("\nCommencing database initialization...")
             if vexists: self.cursor.execute("DROP TABLE videos")
             if eexists: self.cursor.execute("DROP TABLE epoch_queue")
             self.cursor.execute(PostgreSqlHandle._epoch_schema)
             self.cursor.execute(PostgreSqlHandle._videos_schema)
+
             self.dbconnection.commit()
             print("Database initialization complete.")
 
@@ -159,13 +161,13 @@ class PostgreSqlHandle:
     def populate_database(self, vtrains, vvalids):
     #{
         #ebsql = "INSERT INTO epoch_queue VALUES(%s, %s, %s, %s, %s)"
-        vsql = "INSERT INTO videos VALUES(%s, %s, %s, %s, %s, %s, %s, %s);"
+        vsql = "INSERT INTO videos VALUES(DEFAULT, %s, %s, %s, %s, %s, %s, %s);"
 
         try:
-            print("Commencing database population...")
+            print("\nCommencing database population...")
             #for eb in eblocks: self.cursor.execute(ebsql, eb.get_tuple())
-            for vt in vtrains: self.cursor.execute(vsql, vt.get_tuple())
-            for vv in vvalids: self.cursor.execute(vsql, vv.get_tuple())
+            for vt in vtrains: self.cursor.execute(vsql, vt.get_insert())
+            for vv in vvalids: self.cursor.execute(vsql, vv.get_insert())
             self.dbconnection.commit()
             print("Database population complete.\n")
 
