@@ -32,6 +32,17 @@ def file_exists(filename):
         with open(filename): return True
     except FileNotFoundError: return False
 
+def video_readable(videoname):
+#{
+    readable = False
+    if file_exists(videoname):
+        video = cv2.VideoCapture(videoname)
+        if video.isOpened(): readable, _ = video.read()
+        video.release()
+
+    return readable
+#}
+
 def trainpart(i=0): return dfc.DATA_TRAIN_PART.replace('IDX', str(i))
 def traindir(i=0): return dfc.ROOT_DATA_TRAIN.replace('IDX', str(i))
 def fakerdir(i=0): return dfc.ROOT_FAKER_FRAMES.replace('IDX', str(i))

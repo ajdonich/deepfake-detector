@@ -3,7 +3,21 @@ import config.config as dfc
 
 class VideoTuple:
 #{
-    def __init__(self, video_id='DEFAULT', blk_id=None, split=None, vidname=None, 
+    insertproto = ("INSERT INTO videos VALUES(DEFAULT, "
+                   "{}, '{}', '{}', {}, '{}', '{}', {})")
+    createsql = ("""CREATE TABLE videos (
+                        video_id SERIAL PRIMARY KEY,
+                        blk_id INTEGER NOT NULL,
+                        split VARCHAR(8) NOT NULL,
+                        vidname VARCHAR(32) NOT NULL,
+                        partition INTEGER NOT NULL,
+                        label VARCHAR(8) NOT NULL,
+                        origname VARCHAR(32),
+                        proc_flg BOOLEAN NOT NULL);
+                    CREATE INDEX ON videos (blk_id, split)
+                 """)
+
+    def __init__(self, video_id=None, blk_id=None, split=None, vidname=None, 
                  partition=None, label=None, origname=None, preprocflg=False):
     #{
         self.video_id = video_id
@@ -14,54 +28,47 @@ class VideoTuple:
         self.partition = partition
         self.label = label
         self.origname = origname
-        self.preprocflg = preprocflg        
+        self.preprocflg = preprocflg
+
+        self._insertsql = None
     #}
 
     def __repr__(self):
         return (f"VideoTuple: {self.video_id}, {self.blk_id}, {self.split}, {self.vidname}, "
                 f"{self.partition}, {self.label}, {self.origname}, {self.preprocflg}")
 
-    def get_insert(self):
-        return (self.blk_id, self.split, self.vidname, self.partition, 
-                self.label, self.origname, self.preprocflg)
+    @property
+    def insertsql(self): 
+        return VideoTuple.insertproto.format(
+            self.blk_id, self.split, self.vidname, self.partition, 
+            self.label, self.origname, self.preprocflg)
 #}
 
 class EpochTuple:
 #{
-    def __init__(self, epoch_id, blk_id, status):
+    insertproto = "INSERT INTO epoch_queue VALUES(DEFAULT, {}, '{}')"
+    createsql = (""" CREATE TABLE epoch_queue (
+                         epoch_id SERIAL PRIMARY KEY,
+                         blk_id INTEGER NOT NULL,
+                         status VARCHAR(16) NOT NULL)
+                 """)
+
+    def __init__(self, epoch_id=None, blk_id=None, status=None):
         self.epoch_id = epoch_id
         self.blk_id = blk_id
         self.status = status
+        self._insertsql = None
 
     def __repr__(self): 
         return (f"EpochTuple: {self.epoch_id}, {self.blk_id}, {self.status}")
 
-    def get_insert(self): 
-        return (self.blk_id, self.status)
+    @property
+    def insertsql(self): 
+        return EpochTuple.insertproto.format(self.blk_id, self.status)
 #}
 
 class PostgreSqlHandle: 
 #{
-    _epoch_schema = (
-        """ CREATE TABLE epoch_queue (
-                epoch_id SERIAL PRIMARY KEY,
-                blk_id INTEGER NOT NULL,
-                status VARCHAR(16) NOT NULL)
-        """)
-    
-    _videos_schema = (
-        """ CREATE TABLE videos (
-                video_id SERIAL PRIMARY KEY,
-                blk_id INTEGER NOT NULL,
-                split VARCHAR(8) NOT NULL,
-                vidname VARCHAR(32) NOT NULL,
-                partition INTEGER NOT NULL,
-                label VARCHAR(8) NOT NULL,
-                origname VARCHAR(32),
-                proc_flg BOOLEAN NOT NULL);
-            CREATE INDEX ON videos (blk_id, split)
-        """)
-
     def __init__(self, verbose=False): 
         self._cursor = None
         self.dbconnection = None
@@ -107,7 +114,7 @@ class PostgreSqlHandle:
     def cursor(self, value): 
         self._cursor = value 
 
-    def sqlquery(self, sql, fetch='all'):
+    def sqlquery(self, sql, fetch=None):
     #{
         result = None
         try:
@@ -145,12 +152,10 @@ class PostgreSqlHandle:
             print("\nCommencing database initialization...")
             if vexists: self.cursor.execute("DROP TABLE videos")
             if eexists: self.cursor.execute("DROP TABLE epoch_queue")
-            self.cursor.execute(PostgreSqlHandle._epoch_schema)
-            self.cursor.execute(PostgreSqlHandle._videos_schema)
-
+            self.cursor.execute(EpochTuple.createsql)
+            self.cursor.execute(VideoTuple.createsql)
             self.dbconnection.commit()
             print("Database initialization complete.")
-
         #}
         except (Exception, psycopg2.DatabaseError) as error:
             print("ERROR:", error); return False
@@ -160,14 +165,10 @@ class PostgreSqlHandle:
 
     def populate_database(self, vtrains, vvalids):
     #{
-        #ebsql = "INSERT INTO epoch_queue VALUES(%s, %s, %s, %s, %s)"
-        vsql = "INSERT INTO videos VALUES(DEFAULT, %s, %s, %s, %s, %s, %s, %s);"
-
         try:
             print("\nCommencing database population...")
-            #for eb in eblocks: self.cursor.execute(ebsql, eb.get_tuple())
-            for vt in vtrains: self.cursor.execute(vsql, vt.get_insert())
-            for vv in vvalids: self.cursor.execute(vsql, vv.get_insert())
+            for vt in vtrains: self.cursor.execute(vt.insertsql)
+            for vv in vvalids: self.cursor.execute(vv.insertsql)
             self.dbconnection.commit()
             print("Database population complete.\n")
 
