@@ -29,15 +29,12 @@ class VideoTuple:
         self.label = label
         self.origname = origname
         self.preprocflg = preprocflg
-
-        self._insertsql = None
     #}
 
     def __repr__(self):
         return (f"VideoTuple: {self.video_id}, {self.blk_id}, {self.split}, {self.vidname}, "
                 f"{self.partition}, {self.label}, {self.origname}, {self.preprocflg}")
 
-    @property
     def insertsql(self): 
         return VideoTuple.insertproto.format(
             self.blk_id, self.split, self.vidname, self.partition, 
@@ -46,25 +43,30 @@ class VideoTuple:
 
 class EpochTuple:
 #{
-    insertproto = "INSERT INTO epoch_queue VALUES(DEFAULT, {}, '{}')"
+    insertproto = "INSERT INTO epoch_queue VALUES(DEFAULT, {}, '{}', '{}')"
+    updateproto = ("UPDATE epoch_queue SET status = '{}' WHERE epoch_id = {}")
+    haltsql = ("SELECT COUNT(*) FROM epoch_queue WHERE status = 'HALT'")
     createsql = (""" CREATE TABLE epoch_queue (
                          epoch_id SERIAL PRIMARY KEY,
                          blk_id INTEGER NOT NULL,
+                         split VARCHAR(8) NOT NULL,
                          status VARCHAR(16) NOT NULL)
                  """)
 
-    def __init__(self, epoch_id=None, blk_id=None, status=None):
+    def __init__(self, epoch_id=None, blk_id=None, split=None, status=None):
         self.epoch_id = epoch_id
         self.blk_id = blk_id
+        self.split = split
         self.status = status
-        self._insertsql = None
 
     def __repr__(self): 
-        return (f"EpochTuple: {self.epoch_id}, {self.blk_id}, {self.status}")
+        return (f"EpochTuple: {self.epoch_id}, {self.blk_id}, {self.split}, {self.status}")
 
-    @property
-    def insertsql(self): 
-        return EpochTuple.insertproto.format(self.blk_id, self.status)
+    def insertsql(self):
+        return EpochTuple.insertproto.format(self.blk_id, self.split, self.status)
+
+    def updatesql(self, status):
+        return EpochTuple.updateproto.format(status, self.epoch_id)
 #}
 
 class PostgreSqlHandle: 
@@ -90,7 +92,7 @@ class PostgreSqlHandle:
             if self.verbose: print(f"PostgreSQL version:\n  {version}")
         #}  
         except (Exception, psycopg2.DatabaseError) as error:
-            print("ERROR:", error)
+            print("PostgreSqlHandle::__enter__, ERROR:", error)
 
         return self
     #}
@@ -125,7 +127,7 @@ class PostgreSqlHandle:
             self.dbconnection.commit()
 
         except (Exception, psycopg2.DatabaseError) as error:
-            print("ERROR:", error)
+            print("PostgreSqlHandle::sqlquery, ERROR:", error)
 
         return result
     #}
@@ -158,7 +160,8 @@ class PostgreSqlHandle:
             print("Database initialization complete.")
         #}
         except (Exception, psycopg2.DatabaseError) as error:
-            print("ERROR:", error); return False
+            print("PostgreSqlHandle::initialize_database, ERROR:", error)
+            return False
         
         return True
     #}
@@ -167,12 +170,12 @@ class PostgreSqlHandle:
     #{
         try:
             print("\nCommencing database population...")
-            for vt in vtrains: self.cursor.execute(vt.insertsql)
-            for vv in vvalids: self.cursor.execute(vv.insertsql)
+            for vt in vtrains: self.cursor.execute(vt.insertsql())
+            for vv in vvalids: self.cursor.execute(vv.insertsql())
             self.dbconnection.commit()
             print("Database population complete.\n")
 
         except (Exception, psycopg2.DatabaseError) as error:
-            print("ERROR:", error)
+            print("PostgreSqlHandle::populate_database, ERROR:", error)
     #}
 #}

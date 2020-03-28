@@ -4,23 +4,19 @@ channels:
   - defaults
 dependencies:
   - pip
-  - dlib
+  - defaults::nomkl
   - wget
-  - cmake
+  - ipykernel
   - psutil
-  - numpy
-  - pandas
-  - pylint
-  - pyspark
   - python=3.7
   - pytest
   - requests
-  - matplotlib
-  - jupyterlab
-  - defaults::tensorflow
   - opencv
-  - kaggle
   - psycopg2
+  - boto3
   - pip:
       - awscli
-      - face_recognition
+      - numpy
+      - pandas
+      - matplotlib
+      - tensorflow

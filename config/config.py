@@ -17,16 +17,25 @@ DATA_SOURCE = 'production'
 
 # Set each of these:
 DATA_LAKE_SAMP = '/Volumes/My Book/deepfake-sample'
-DATA_LAKE_PROD = '/Volumes/My Book/deepfake-detect-datalake'
+DATA_LAKE_PROD = '/home/ec2-user/SageMaker/ebs/deepfake-detect-datalake'
 COOKIES_TXT = '../security/cookies.txt'
 
 # ------------------ PostreSQL configuration ----------------------
 
-HOST = 'localhost'
+HOST = 'posgres-free-tier.ckkzihrei3jp.us-west-2.rds.amazonaws.com'
 DATABASE = 'deepfakedb'
 DBUSER = 'deepfakeusr'
 DBPASSWORD = 'deepfakepwd'
 DBPORT = '5432'
+
+# ------------------------ Runtime config -------------------------
+
+# Tensorflow callback base output directories
+MODEL_STORE = '/home/ec2-user/SageMaker/models'
+TBOARD_LOG = '/home/ec2-user/SageMaker/tensorboard'
+
+TARGETSZ = (631,353)    # ConvNet output/target image size
+NBATCH_PER_VIDEO = 2    # Currently 60 diffs/video, 30 diffs/batch
 
 # --------------- The rest is dynamically created ------------------
 

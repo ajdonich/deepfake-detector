@@ -71,7 +71,7 @@ def faked_video_pairs(ipart):
     return pc_pairs
 #}
 
-def _crop_params(fwidth, fheight, crop):
+def crop_params(fwidth, fheight, crop):
 #{
     is_portrait_orient = fwidth < fheight
     lft = (fwidth - crop[1])//2 if is_portrait_orient else (fwidth - crop[0])//2
@@ -80,105 +80,105 @@ def _crop_params(fwidth, fheight, crop):
     return is_portrait_orient, lft, rht, bot
 #}
 
-def lazy_load_testdata(videonames):
-#{
-    vidx = 0
-    while True:
-    #{
-        initial = time.time()
-        for x_test in _load_video(f"{testdir()}/{videonames[vidx]}"):
-            yield x_test.astype(np.float32)
+# def lazy_load_testdata(videonames):
+# #{
+#     vidx = 0
+#     while True:
+#     #{
+#         initial = time.time()
+#         for x_test in _load_video(f"{testdir()}/{videonames[vidx]}"):
+#             yield x_test.astype(np.float32)
 
-        print(f"Batch {vidx} processing time: {time.time()-initial:.3f} sec")
-        vidx += 1; vidx %= len(videonames)
-    #}
-#}
+#         print(f"Batch {vidx} processing time: {time.time()-initial:.3f} sec")
+#         vidx += 1; vidx %= len(videonames)
+#     #}
+# #}
 
-def lazy_load_partition(splitter, validation=False):
-#{
-    # Fcn loads only 30 frames per yield/batch. This is necessary to pass
-    # Tensoflow assert that tensor size (~1080*1920*30*32) < sizeof(int32)
-    videonames = splitter.valid_split if validation else splitter.train_split
+# def lazy_load_partition(splitter, validation=False):
+# #{
+#     # Fcn loads only 30 frames per yield/batch. This is necessary to pass
+#     # Tensoflow assert that tensor size (~1080*1920*30*32) < sizeof(int32)
+#     videonames = splitter.valid_split if validation else splitter.train_split
 
-    vidx = 0
-    while True:
-    #{
-        #initial = time.time()
-        xloader = _load_video(f"{traindir()}/{videonames[vidx]}")
-        yloader = _load_target(f"{fakerdir()}/{videonames[vidx][:-4]}")
-        for x_train, y_train in zip(xloader, yloader): yield x_train, y_train
+#     vidx = 0
+#     while True:
+#     #{
+#         #initial = time.time()
+#         xloader = _load_video(f"{traindir()}/{videonames[vidx]}")
+#         yloader = _load_target(f"{fakerdir()}/{videonames[vidx][:-4]}")
+#         for x_train, y_train in zip(xloader, yloader): yield x_train, y_train
 
-        #print(f"Batch {vidx} processing time: {time.time()-initial:.3f} sec")
-        vidx += 1; vidx %= len(videonames)
-    #}
-#}
+#         #print(f"Batch {vidx} processing time: {time.time()-initial:.3f} sec")
+#         vidx += 1; vidx %= len(videonames)
+#     #}
+# #}
 
-def _load_video(videoname, nsamps=30, fentry=120, nframes=60, crop=(1280,720), scsize=(640,360)):
-#{
-    video = cv2.VideoCapture(videoname)
-    video.set(cv2.CAP_PROP_POS_FRAMES, fentry)
+# def _load_video(videoname, nsamps=30, fentry=120, nframes=60, crop=(1280,720), scsize=(640,360)):
+# #{
+#     video = cv2.VideoCapture(videoname)
+#     video.set(cv2.CAP_PROP_POS_FRAMES, fentry)
 
-    # Get orientation from video header
-    fwidth  = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-    fheight = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    is_portrait_orient, lft, rht, bot = _crop_params(fwidth, fheight, crop)
-    scorientsize = (scsize[1], scsize[0]) if is_portrait_orient else scsize
+#     # Get orientation from video header
+#     fwidth  = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+#     fheight = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+#     is_portrait_orient, lft, rht, bot = crop_params(fwidth, fheight, crop)
+#     scorientsize = (scsize[1], scsize[0]) if is_portrait_orient else scsize
 
-    fidx = 0
-    while video.isOpened() and fidx < nframes:
-    #{
-        samples = np.empty((nsamps, scsize[1], scsize[0], 3), dtype=np.uint8)
-        for i in range(nsamps):
-        #{
-            vsuccess, videoframe = video.read()
-            assert vsuccess, f"{videoname} frame {fentry+fidx+i} read failed"
+#     fidx = 0
+#     while video.isOpened() and fidx < nframes:
+#     #{
+#         samples = np.empty((nsamps, scsize[1], scsize[0], 3), dtype=np.uint8)
+#         for i in range(nsamps):
+#         #{
+#             vsuccess, videoframe = video.read()
+#             assert vsuccess, f"{videoname} frame {fentry+fidx+i} read failed"
 
-            # Crop, then scale image size (and finally rotate if portrait orientation)
-            videoframe = cv2.resize(videoframe[0:bot,lft:rht,:], scorientsize, interpolation=cv2.INTER_AREA)
-            if is_portrait_orient: videoframe = cv2.rotate(videoframe, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            samples[i,:,:,:] = videoframe
-        #}
+#             # Crop, then scale image size (and finally rotate if portrait orientation)
+#             videoframe = cv2.resize(videoframe[0:bot,lft:rht,:], scorientsize, interpolation=cv2.INTER_AREA)
+#             if is_portrait_orient: videoframe = cv2.rotate(videoframe, cv2.ROTATE_90_COUNTERCLOCKWISE)
+#             samples[i,:,:,:] = videoframe
+#         #}
 
-        yield samples
-        fidx += nsamps
-    #}
+#         yield samples
+#         fidx += nsamps
+#     #}
 
-    video.release()
-#}
+#     video.release()
+# #}
 
-def _load_target(vfakerdir, nsamps=30, fentry=120, nframes=60, targsize=(547,347)):
-#{
-    fidx, flatsz = 0, (targsize[1] * targsize[0] * 3)
+# def _load_target(vfakerdir, nsamps=30, fentry=120, nframes=60, targsize=(547,347)):
+# #{
+#     fidx, flatsz = 0, (targsize[1] * targsize[0] * 3)
 
-    while fidx < nframes:
-    #{
-        targets = np.zeros((nsamps, flatsz), dtype=np.uint8)
-        if os.path.isdir(vfakerdir):
-        #{
-            for i in range(nsamps):
-                targets[i,:] = cv2.imread(f"{vfakerdir}/fakerframe{fentry+fidx+i}.jpg").flatten()
-        #}
+#     while fidx < nframes:
+#     #{
+#         targets = np.zeros((nsamps, flatsz), dtype=np.uint8)
+#         if os.path.isdir(vfakerdir):
+#         #{
+#             for i in range(nsamps):
+#                 targets[i,:] = cv2.imread(f"{vfakerdir}/fakerframe{fentry+fidx+i}.jpg").flatten()
+#         #}
 
-        yield targets
-        fidx += nsamps
-    #}
-#}
+#         yield targets
+#         fidx += nsamps
+#     #}
+# #}
 
-def _load_mean_target(vfakerdir, nsamps=30, fentry=120, nframes=60):
-#{
-    fidx = 0
-    while fidx < nframes:
-    #{
-        targets = np.zeros((nsamps, ), dtype=float)
-        if os.path.isdir(vfakerdir):
-        #{
-            for i in range(nsamps):
-                fakerframe = cv2.imread(f"{vfakerdir}/fakerframe{fentry+fidx+i}.jpg")                
-                targets[i] = cv2.mean(fakerframe[:,:,1])[0] # Just use G-channel
-        #}
+# def _load_mean_target(vfakerdir, nsamps=30, fentry=120, nframes=60):
+# #{
+#     fidx = 0
+#     while fidx < nframes:
+#     #{
+#         targets = np.zeros((nsamps, ), dtype=float)
+#         if os.path.isdir(vfakerdir):
+#         #{
+#             for i in range(nsamps):
+#                 fakerframe = cv2.imread(f"{vfakerdir}/fakerframe{fentry+fidx+i}.jpg")                
+#                 targets[i] = cv2.mean(fakerframe[:,:,1])[0] # Just use G-channel
+#         #}
 
-        yield targets
-        fidx += nsamps
-    #}
-#}
+#         yield targets
+#         fidx += nsamps
+#     #}
+# #}
 

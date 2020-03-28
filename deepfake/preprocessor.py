@@ -1,5 +1,4 @@
-import time, re, os
-import cv2
+import time, re, os, cv2
 import numpy as np
 
 import config.config as dfc
@@ -23,23 +22,25 @@ class Preprocessor:
     #{
         unpackfcn = lambda vt: pgdb.VideoTuple(*vt)
         countsql = ("SELECT COUNT(*) FROM epoch_queue WHERE "
-                    "status = 'QUEUED' OR status = 'RUNNING'")
-        haltsql = ("SELECT COUNT(*) FROM epoch_queue WHERE status = 'HALT'")
+                    "split = 'train' and status != 'COMPLETE'")
 
         while True:
         #{
-             # Check for halt flag
+            # Check for halt flag
             with pgdb.PostgreSqlHandle() as db_handle:
-                if (db_handle.sqlquery(haltsql, fetch='one')[0] > 0): break
+                if (db_handle.sqlquery(pgdb.EpochTuple.haltsql, fetch='one')[0] > 0):
+                    break
 
             # Poll epoch_queue
-            doappend = False
+            qcount = None
             with pgdb.PostgreSqlHandle() as db_handle:
-                doappend = (db_handle.sqlquery(countsql, fetch='one')[0] < self.minqueued)
+                qcount = db_handle.sqlquery(countsql, fetch='one')[0]
 
             # Sleep or process and append to epoch_queue
-            if not doappend: time.sleep(self.eventloop)
-            else:
+            if self.minqueued is not None and qcount >= self.minqueued:
+                time.sleep(self.eventloop)
+            
+            else: 
             #{
                 # Select a random block from videos table
                 blk_id = np.random.randint(self.maxblkid+1)
@@ -84,18 +85,20 @@ class Preprocessor:
                 with pgdb.PostgreSqlHandle() as db_handle:
                     db_handle.sqlquery(f"UPDATE videos SET proc_flg = TRUE WHERE blk_id = {blk_id}")
 
-                # Insert epoch block into queue
+                # Insert epoch block onto the queue
                 with pgdb.PostgreSqlHandle() as db_handle:
-                    db_handle.sqlquery(pgdb.EpochTuple(blk_id=blk_id, status='QUEUED').insertsql)
+                    etraintup = pgdb.EpochTuple(blk_id=blk_id, split='train', status='QUEUED')
+                    evalidtup = pgdb.EpochTuple(blk_id=blk_id, split='validate', status='QUEUED')
+                    db_handle.sqlquery(etraintup.insertsql()); db_handle.sqlquery(evalidtup.insertsql())
             #}
         #}
     #}
-
+    
     # Given a video name pair: vname a deepfake, and oname its original/parent, function creates
     # "fakerframe" images (scaled-difference-blend-mode-images), cropped to size crop, starting
     # from video frame: fentry and then contiguously for: nframes. Also creates a 'fakerprint' 
     # per pair, which is just the scaled sum the fakerframes. All images files saved to datapath.
-    def create_diff_frames(self, vname, oname, datapath, nframes=60, crop=(1280,720), targsize=(547,347)):
+    def create_diff_frames(self, vname, oname, datapath, nframes=60, crop=(1280,720), targsize=dfc.TARGETSZ):
     #{
         video = cv2.VideoCapture(vname)
         orig = cv2.VideoCapture(oname)
@@ -114,7 +117,7 @@ class Preprocessor:
         # Get orientation from video header
         fwidth  = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
         fheight = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        is_portrait_orient, lft, rht, bot = df._crop_params(fwidth, fheight, crop)
+        is_portrait_orient, lft, rht, bot = df.crop_params(fwidth, fheight, crop)
         targorientsize = (targsize[1], targsize[0]) if is_portrait_orient else targsize
 
         zblock = np.zeros((targsize[1], targsize[0], 3), dtype=np.uint8)
@@ -141,7 +144,7 @@ class Preprocessor:
                 # Diff and scale pixel values (usually scale up to fill [0,255] range) 
                 fakerframe = cv2.subtract(cv2.max(videoframe, origframe), cv2.min(videoframe, origframe))
                 fakerframe = cv2.scaleAdd(fakerframe, 255/fakerframe.max(), zblock) # faster than np.mult
-                cv2.imwrite(f"{datapath}/fakerframe{fentry+fidx}.jpg", fakerframe)
+                cv2.imwrite(f"{datapath}/fakerframe{fidx}.jpg", fakerframe)
                 
                 # Effectively fakerprint = reduce(sum, fakerframes)
                 if fakerprint is None: fakerprint = fakerframe.astype(np.uint16)
