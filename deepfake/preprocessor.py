@@ -17,13 +17,20 @@ class Preprocessor:
         sql = "SELECT MAX(blk_id) FROM videos"
         with pgdb.PostgreSqlHandle() as db_handle:
             return db_handle.sqlquery(sql, fetch='one')[0]
-
+    
+    # Utility fcns to reprocess bad block
+    def reprocess_block(self, blk_id, doinsert=False):
+        with pgdb.PostgreSqlHandle() as db_handle:
+            db_handle.sqlquery((f"UPDATE videos SET proc_flg = "
+                                f"FALSE WHERE blk_id = {blk_id}"))
+        self.process_block(blk_id)
+        if doinsert: self.insert_block(blk_id)
+    
+    # Thread loop
     def run(self):
     #{
-        unpackfcn = lambda vt: pgdb.VideoTuple(*vt)
         countsql = ("SELECT COUNT(*) FROM epoch_queue WHERE "
-                    "split = 'train' and status != 'COMPLETE'")
-
+                    "split = 'train' and status != 'COMPLETE'")        
         while True:
         #{
             # Check for halt flag
@@ -35,64 +42,71 @@ class Preprocessor:
             qcount = None
             with pgdb.PostgreSqlHandle() as db_handle:
                 qcount = db_handle.sqlquery(countsql, fetch='one')[0]
-
-            # Sleep or process and append to epoch_queue
-            if self.minqueued is not None and qcount >= self.minqueued:
-                time.sleep(self.eventloop)
-            
-            else: 
-            #{
-                # Select a random block from videos table
+                
+            # Process a random block and append it to epoch_queue
+            if self.minqueued is None or qcount < self.minqueued:
                 blk_id = np.random.randint(self.maxblkid+1)
-                blksql = (f"SELECT * FROM videos WHERE blk_id = {blk_id} " 
-                            "AND proc_flg = FALSE AND label = 'FAKE' "
-                            "AND (split = 'train' OR split = 'validate')")
-                
-                vidtuples = []
-                with pgdb.PostgreSqlHandle() as db_handle:
-                    dbresult = db_handle.sqlquery(blksql, fetch='all')
-                    vidtuples = [vtup for vtup in map(unpackfcn, dbresult)]
-                
-                # If needed, preprocess before appending
-                totproctime, proctimes = time.time(), []
-                print(f"Preprocessing epoch block {blk_id}:")
-                for i, vtup in enumerate(vidtuples):
-                #{
-                    # Create directories if needed
-                    proctimes.append(time.time())
-                    if not os.path.isdir(df.fakerdir(vtup.partition)): 
-                        os.mkdir(df.fakerdir(vtup.partition))
-
-                    vdir = re.split(r'[/.]', vtup.vidname)[-2]
-                    datapath = f"{df.fakerdir(vtup.partition)}/{vdir}"
-                    if not os.path.isdir(datapath): os.mkdir(datapath)
-                    
-                    # Create and save diff images
-                    videourl = f"{df.traindir(vtup.partition)}/{vtup.vidname}"
-                    origurl = f"{df.traindir(vtup.partition)}/{vtup.origname}"
-                    self.create_diff_frames(videourl, origurl, datapath)
-                    
-                    # Logging
-                    proctimes[-1] = time.time() - proctimes[-1]
-                    if len(proctimes) == self.logbatch:
-                        print(f"  Processed {i+1} videos, running average time/pair:",
-                              f"{np.average(proctimes):.2f} sec")
-                        proctimes = []
-                #}
-                print(f"  Total process time: {(time.time() - totproctime)/60.0:.2f} min")
-
-                # Update preprocess flag on videos
-                with pgdb.PostgreSqlHandle() as db_handle:
-                    db_handle.sqlquery(f"UPDATE videos SET proc_flg = TRUE WHERE blk_id = {blk_id}")
-
-                # Insert epoch block onto the queue
-                with pgdb.PostgreSqlHandle() as db_handle:
-                    etraintup = pgdb.EpochTuple(blk_id=blk_id, split='train', status='QUEUED')
-                    evalidtup = pgdb.EpochTuple(blk_id=blk_id, split='validate', status='QUEUED')
-                    db_handle.sqlquery(etraintup.insertsql()); db_handle.sqlquery(evalidtup.insertsql())
-            #}
+                self.process_block(blk_id)
+                self.insert_block(blk_id)
+            
+            else: time.sleep(self.eventloop)
         #}
     #}
+    
+    # Process the block of 
+    def process_block(self, blk_id):
+    #{
+        unpackfcn = lambda vt: pgdb.VideoTuple(*vt)
+        blksql = (f"SELECT * FROM videos WHERE blk_id = {blk_id} " 
+                   "AND proc_flg = FALSE AND label = 'FAKE' "
+                   "AND (split = 'train' OR split = 'validate')")
+        
+        vidtuples = []
+        with pgdb.PostgreSqlHandle() as db_handle:
+            dbresult = db_handle.sqlquery(blksql, fetch='all')
+            vidtuples = [vtup for vtup in map(unpackfcn, dbresult)]
+        
+        # If needed, preprocess before appending
+        totproctime, proctimes = time.time(), []
+        print(f"Preprocessing epoch block {blk_id}:")
+        for i, vtup in enumerate(vidtuples):
+        #{
+            # Create directories if needed
+            proctimes.append(time.time())
+            if not os.path.isdir(df.fakerdir(vtup.partition)): 
+                os.mkdir(df.fakerdir(vtup.partition))
+
+            vdir = re.split(r'[/.]', vtup.vidname)[-2]
+            datapath = f"{df.fakerdir(vtup.partition)}/{vdir}"
+            if not os.path.isdir(datapath): os.mkdir(datapath)
+            
+            # Create and save diff images
+            videourl = f"{df.traindir(vtup.partition)}/{vtup.vidname}"
+            origurl = f"{df.traindir(vtup.partition)}/{vtup.origname}"
+            self.create_diff_frames(videourl, origurl, datapath)
+            
+            # Logging
+            proctimes[-1] = time.time() - proctimes[-1]
+            if len(proctimes) == self.logbatch:
+                print(f"  Processed {i+1} videos, running average time/pair:",
+                        f"{np.average(proctimes):.2f} sec")
+                proctimes = []
+        #}
+        print(f"  Total process time: {(time.time() - totproctime)/60.0:.2f} min")
+
+        # Update preprocess flag on videos
+        with pgdb.PostgreSqlHandle() as db_handle:
+            db_handle.sqlquery(f"UPDATE videos SET proc_flg = TRUE WHERE blk_id = {blk_id}")
+    #}
+    
+    
+    # Insert epoch block onto the queue
+    def insert_block(self, blk_id): 
+        with pgdb.PostgreSqlHandle() as db_handle:
+            etraintup = pgdb.EpochTuple(blk_id=blk_id, split='train', status='QUEUED')
+            evalidtup = pgdb.EpochTuple(blk_id=blk_id, split='validate', status='QUEUED')
+            db_handle.sqlquery(etraintup.insertsql()); db_handle.sqlquery(evalidtup.insertsql())
+            
     
     # Given a video name pair: vname a deepfake, and oname its original/parent, function creates
     # "fakerframe" images (scaled-difference-blend-mode-images), cropped to size crop, starting

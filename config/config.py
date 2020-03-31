@@ -12,17 +12,19 @@
 ##########################################################################################
 
 # Pick one:
+
 DATA_SOURCE = 'production'
 #DATA_SOURCE = 'sample'
 
 # Set each of these:
-DATA_LAKE_SAMP = '/Volumes/My Book/deepfake-sample'
+DATA_LAKE_SAMP = '/home/ec2-user/SageMaker/ebs/deepfake-sample-test'
 DATA_LAKE_PROD = '/home/ec2-user/SageMaker/ebs/deepfake-detect-datalake'
 COOKIES_TXT = '../security/cookies.txt'
 
-# ------------------ PostreSQL configuration ----------------------
+# ------------------ PostgreSQL configuration ----------------------
 
-HOST = 'posgres-free-tier.ckkzihrei3jp.us-west-2.rds.amazonaws.com'
+# HOST = 'posgres-free-tier.ckkzihrei3jp.us-west-2.rds.amazonaws.com'
+HOST = 'postgres-deepfake-db-east.cugcvlfj9hxz.us-east-1.rds.amazonaws.com'
 DATABASE = 'deepfakedb'
 DBUSER = 'deepfakeusr'
 DBPASSWORD = 'deepfakepwd'

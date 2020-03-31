@@ -19,4 +19,4 @@ dependencies:
       - numpy
       - pandas
       - matplotlib
-      - tensorflow
+      - tensorflow-gpu
